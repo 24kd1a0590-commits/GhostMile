@@ -6,7 +6,7 @@ import sys
 # Set standard output encoding to UTF-8
 sys.stdout.reconfigure(encoding='utf-8')
 
-BASE_URL = "http://localhost:8000/api"
+BASE_URL = "http://localhost:8001/api"
 
 def make_request(url, method="GET", data=None, token=None):
     headers = {"Content-Type": "application/json"}
