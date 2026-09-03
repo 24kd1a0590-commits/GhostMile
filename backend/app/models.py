@@ -26,6 +26,16 @@ class ShipmentPriority(str, Enum):
     HIGH = "HIGH"
     URGENT = "URGENT"
 
+class ProofType(str, Enum):
+    PICKUP = "PICKUP"
+    DELIVERY = "DELIVERY"
+
+class PaymentStatus(str, Enum):
+    PENDING = "PENDING"
+    ESCROW_HELD = "ESCROW_HELD"
+    RELEASED = "RELEASED"
+    FAILED = "FAILED"
+
 class UserRegister(BaseModel):
     name: str = Field(..., min_length=2, description="Full name required")
     email: EmailStr = Field(..., description="Valid email address required")
@@ -215,16 +225,45 @@ class TrackingState(BaseModel):
     is_demo: bool = True
     last_updated: str
 
+class ProofModel(BaseModel):
+    shipment_id: str
+    driver_id: Optional[str] = None
+    type: ProofType
+    image_metadata: Dict[str, Any] = Field(default_factory=dict)
+    photo_url: Optional[str] = None
+    timestamp: Optional[str] = None
+    verification_status: str = "VERIFIED"
+
 class ProofUpload(BaseModel):
     shipment_id: str
-    stage: str
-    photo_url: str
+    stage: Optional[str] = "delivery"
+    photo_url: Optional[str] = None
+    image_metadata: Optional[Dict[str, Any]] = None
     verifier_name: Optional[str] = None
     verification_code: Optional[str] = None
 
-class PaymentEscrow(BaseModel):
+class ProofVerifyRequest(BaseModel):
     shipment_id: str
+    verification_code: str = Field(..., min_length=4)
+    verifier_name: Optional[str] = "Receiver / APMC Inspector"
+
+class PaymentEscrowRequest(BaseModel):
+    shipment_id: str
+    amount_inr: float = Field(..., gt=0)
+
+class PaymentReleaseRequest(BaseModel):
+    shipment_id: str
+
+class PaymentRecord(BaseModel):
+    transaction_id: str
+    shipment_id: str
+    shipper_id: Optional[str] = None
+    driver_id: Optional[str] = None
     amount_inr: float
+    status: PaymentStatus
+    created_at: str
+    released_at: Optional[str] = None
+    disclaimer: str = "DEMO PAYMENT — No real money transferred"
 
 class AnalyticsOverview(BaseModel):
     total_users: int

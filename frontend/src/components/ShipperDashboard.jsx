@@ -1,24 +1,73 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Plus, MapPin, Navigation, Truck, ShieldCheck, Clock, CheckCircle2, AlertCircle, Trash2, Eye, X, Filter } from 'lucide-react';
+import { Package, Plus, MapPin, Navigation, Truck, ShieldCheck, Clock, CheckCircle2, AlertCircle, Trash2, Eye, X, Filter, Lock, Check, Star, ArrowRight, Radio, Search, Scale, IndianRupee, Compass } from 'lucide-react';
+import LiveMap from './LiveMap';
 import { api } from '../services/api';
 
-export default function ShipperDashboard({ user, shipments, onCreateShipment, onSelectShipmentToTrack, onRefreshShipments }) {
+const mockRecommendedDrivers = [
+  {
+    id: 'drv_1',
+    name: 'Suresh Kumar',
+    rating: 4.9,
+    reviews: 128,
+    vehicle: 'Mahindra Bolero LCV Truck',
+    capacity_kg: 500,
+    match_pct: 96,
+    eta_mins: 35,
+    price_inr: 1850,
+    phone: '+91 9876543210'
+  },
+  {
+    id: 'drv_2',
+    name: 'Ramesh Gowda',
+    rating: 4.8,
+    reviews: 94,
+    vehicle: 'Tata Ace Gold Pickup',
+    capacity_kg: 600,
+    match_pct: 92,
+    eta_mins: 45,
+    price_inr: 1800,
+    phone: '+91 9123456789'
+  },
+  {
+    id: 'drv_3',
+    name: 'Vijay Patil',
+    rating: 4.7,
+    reviews: 62,
+    vehicle: 'Ashok Leyland Dost',
+    capacity_kg: 750,
+    match_pct: 88,
+    eta_mins: 55,
+    price_inr: 1750,
+    phone: '+91 9988776655'
+  }
+];
+
+export default function ShipperDashboard({ user, shipments, onCreateShipment, onSelectShipmentToTrack, onRefreshShipments, showToast }) {
   const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
   const [packageType, setPackageType] = useState('Gunnysacks');
   const [weight, setWeight] = useState('120');
-  const [offeredPrice, setOfferedPrice] = useState('1850');
   const [pickupAddr, setPickupAddr] = useState('Bengaluru KSRTC Hub');
   const [destAddr, setDestAddr] = useState('Mandya Village APMC');
   const [priority, setPriority] = useState('MEDIUM');
-  
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [offeredPrice, setOfferedPrice] = useState('1850');
+
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [isSearchingDrivers, setIsSearchingDrivers] = useState(false);
+  const [createdShipmentId, setCreatedShipmentId] = useState(null);
+  const [showRecommendedDrivers, setShowRecommendedDrivers] = useState(false);
   const [selectedShipment, setSelectedShipment] = useState(null);
+  const [trackingShipment, setTrackingShipment] = useState(null);
+  
   const [filterStatus, setFilterStatus] = useState('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const handleSubmit = async (e) => {
+  const notify = (msg, type = 'info', title = null) => {
+    if (showToast) showToast(msg, type, title);
+  };
+
+  const handleSubmitCreate = async (e) => {
     e.preventDefault();
     setErrorMsg('');
 
@@ -26,26 +75,24 @@ export default function ShipperDashboard({ user, shipments, onCreateShipment, on
     const parsedPrice = parseFloat(offeredPrice);
 
     if (!name || name.trim().length < 2) {
-      setErrorMsg('Load name is required (minimum 2 characters)');
+      setErrorMsg('Cargo Name is required (at least 2 letters)');
       return;
     }
-
     if (isNaN(parsedWeight) || parsedWeight <= 0) {
-      setErrorMsg('Weight must be a positive number greater than 0 kg');
+      setErrorMsg('Weight must be greater than 0 kg');
       return;
     }
-
     if (isNaN(parsedPrice) || parsedPrice <= 0) {
-      setErrorMsg('Offered price must be greater than ₹0');
+      setErrorMsg('Offer Price must be greater than ₹0');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      await onCreateShipment({
+      const created = await onCreateShipment({
         name: name.trim(),
         title: name.trim(),
-        description: description.trim(),
+        description: `Package Type: ${packageType}`,
         package_type: packageType,
         weight: parsedWeight,
         weight_kg: parsedWeight,
@@ -57,10 +104,16 @@ export default function ShipperDashboard({ user, shipments, onCreateShipment, on
         destination_coordinates: { lat: 12.5218, lng: 76.8951, address_name: destAddr.trim() },
         priority
       });
+
       setShowCreateModal(false);
-      setName('');
-      setDescription('');
-      setErrorMsg('');
+      setIsSearchingDrivers(true);
+
+      setTimeout(() => {
+        setIsSearchingDrivers(false);
+        setCreatedShipmentId(created?.id || 'shp_new');
+        setShowRecommendedDrivers(true);
+      }, 1500);
+
     } catch (err) {
       setErrorMsg(err.message || 'Failed to dispatch shipment');
     } finally {
@@ -68,157 +121,174 @@ export default function ShipperDashboard({ user, shipments, onCreateShipment, on
     }
   };
 
-  const handleDeleteShipment = async (shipmentId) => {
-    if (!window.confirm("Are you sure you want to cancel and delete this shipment dispatch?")) return;
+  const handleRequestDriver = async (driver) => {
+    if (!createdShipmentId) return;
     try {
-      await api.deleteShipment(shipmentId);
-      setSelectedShipment(null);
+      await api.updateShipment(createdShipmentId, {
+        driver_id: driver.id,
+        driver_name: driver.name,
+        status: 'ACCEPTED'
+      });
+
+      notify(`Driver Assigned: ${driver.name} accepted your load request!`, 'success', 'Driver Requested');
+      setShowRecommendedDrivers(false);
       if (onRefreshShipments) onRefreshShipments();
     } catch (err) {
-      alert(err.message || 'Failed to cancel shipment');
+      notify(err.message || 'Failed to request driver', 'error');
     }
   };
 
-  const filteredShipments = shipments.filter(s => {
-    if (filterStatus === 'ALL') return true;
-    if (filterStatus === 'AVAILABLE') return s.status === 'AVAILABLE';
-    if (filterStatus === 'ACTIVE') return ['ACCEPTED', 'PICKED_UP', 'IN_TRANSIT', 'ARRIVED'].includes(s.status);
-    if (filterStatus === 'COMPLETED') return ['DELIVERED', 'PAYMENT_RELEASED'].includes(s.status);
+  const handleDeleteShipment = async (shipmentId) => {
+    try {
+      await api.deleteShipment(shipmentId);
+      setSelectedShipment(null);
+      notify('Shipment cancelled and deleted cleanly', 'info');
+      if (onRefreshShipments) onRefreshShipments();
+    } catch (err) {
+      notify(err.message || 'Failed to cancel shipment', 'error');
+    }
+  };
+
+  const activeCount = shipments.filter(s => ['AVAILABLE', 'ACCEPTED', 'PICKED_UP', 'IN_TRANSIT', 'ARRIVED'].includes(s.status)).length;
+  const deliveredCount = shipments.filter(s => ['DELIVERED', 'PAYMENT_RELEASED'].includes(s.status)).length;
+  const totalSpentINR = shipments.filter(s => ['DELIVERED', 'PAYMENT_RELEASED'].includes(s.status))
+    .reduce((sum, s) => sum + (s.offered_price || s.offered_price_inr || 0), 0);
+
+  const filteredList = shipments.filter(s => {
+    if (filterStatus === 'ACTIVE') return ['AVAILABLE', 'ACCEPTED', 'PICKED_UP', 'IN_TRANSIT', 'ARRIVED'].includes(s.status);
+    if (filterStatus === 'DELIVERED') return ['DELIVERED', 'PAYMENT_RELEASED'].includes(s.status);
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      return (s.name || '').toLowerCase().includes(q) || (s.destination || '').toLowerCase().includes(q) || (s.id || '').toLowerCase().includes(q);
+    }
     return true;
   });
 
   const getStatusBadge = (status) => {
     switch (status) {
       case 'AVAILABLE':
-        return <span className="px-2.5 py-1 text-[10px] font-extrabold bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-full">BROADCASTING</span>;
+        return <span className="px-2.5 py-1 text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-full">BROADCASTING</span>;
       case 'ACCEPTED':
       case 'PICKED_UP':
       case 'IN_TRANSIT':
       case 'ARRIVED':
-        return <span className="px-2.5 py-1 text-[10px] font-extrabold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full animate-pulse">{status.replace('_', ' ')}</span>;
+        return <span className="px-2.5 py-1 text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full animate-pulse">{status.replace('_', ' ')}</span>;
       case 'DELIVERED':
       case 'PAYMENT_RELEASED':
-        return <span className="px-2.5 py-1 text-[10px] font-extrabold bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded-full">COMPLETED</span>;
-      case 'CANCELLED':
-        return <span className="px-2.5 py-1 text-[10px] font-extrabold bg-red-500/10 text-red-400 border border-red-500/20 rounded-full">CANCELLED</span>;
+        return <span className="px-2.5 py-1 text-[10px] font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded-full">DELIVERED</span>;
       default:
-        return <span className="px-2.5 py-1 text-[10px] font-extrabold bg-slate-800 text-slate-400 rounded-full">{status}</span>;
+        return <span className="px-2.5 py-1 text-[10px] font-bold bg-slate-800 text-slate-400 rounded-full">{status}</span>;
     }
   };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 py-6">
       
-      {/* Header Banner */}
-      <div className="glass-card p-6 sm:p-8 rounded-3xl border border-blue-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+      {/* TOP GREETING & PRIMARY CTA */}
+      <div className="bg-slate-900 border border-slate-800 p-6 sm:p-8 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
         <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-bold uppercase mb-2">
-            <Package className="w-3.5 h-3.5" /> Shipper & Rural Producer Dashboard
-          </div>
-          <h2 className="text-2xl sm:text-3xl font-black text-white italic">
-            My Dispatches & Shipments 📦
-          </h2>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+            Welcome, {user?.name || 'Kaveri Organic Farmers'}
+          </h1>
           <p className="text-slate-400 text-xs mt-1">
-            Create, track, and manage micro-freight loads dispatched to corridor return drivers.
+            Dispatch small freight loads to empty commercial return trucks across rural corridors.
           </p>
         </div>
 
         <button
           onClick={() => setShowCreateModal(true)}
-          className="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black px-6 py-3.5 rounded-2xl shadow-xl transition-all flex items-center justify-center gap-2 text-xs"
+          className="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold px-6 py-3.5 rounded-2xl shadow-xl transition-all flex items-center justify-center gap-2 text-xs"
         >
-          <Plus className="w-4 h-4 stroke-[3]" />
-          DISPATCH NEW SHIPMENT
+          <Plus className="w-4 h-4 stroke-[3]" /> + Create Shipment
         </button>
       </div>
 
-      {/* Filter Tabs */}
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-900/90 p-2 rounded-2xl border border-slate-800">
-        <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-slate-400 ml-2" />
-          <span className="text-xs font-bold text-slate-400 uppercase">Filter:</span>
+      {/* TOP METRICS CARDS GRID */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-400 uppercase">Active Shipments</span>
+            <div className="w-9 h-9 bg-slate-800 text-blue-400 rounded-xl flex items-center justify-center font-bold">
+              <Package className="w-4 h-4" />
+            </div>
+          </div>
+          <p className="text-2xl sm:text-3xl font-black text-white">{activeCount}</p>
+          <p className="text-[11px] font-bold text-blue-400">Broadcasting & In Transit</p>
         </div>
-        <div className="flex overflow-x-auto gap-2">
-          <button
-            onClick={() => setFilterStatus('ALL')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-              filterStatus === 'ALL' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white bg-slate-950'
-            }`}
-          >
-            All Shipments ({shipments.length})
-          </button>
-          <button
-            onClick={() => setFilterStatus('AVAILABLE')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-              filterStatus === 'AVAILABLE' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white bg-slate-950'
-            }`}
-          >
-            Broadcasting ({shipments.filter(s => s.status === 'AVAILABLE').length})
-          </button>
-          <button
-            onClick={() => setFilterStatus('ACTIVE')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-              filterStatus === 'ACTIVE' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white bg-slate-950'
-            }`}
-          >
-            In Transit ({shipments.filter(s => ['ACCEPTED', 'PICKED_UP', 'IN_TRANSIT', 'ARRIVED'].includes(s.status)).length})
-          </button>
-          <button
-            onClick={() => setFilterStatus('COMPLETED')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-              filterStatus === 'COMPLETED' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white bg-slate-950'
-            }`}
-          >
-            Delivered ({shipments.filter(s => ['DELIVERED', 'PAYMENT_RELEASED'].includes(s.status)).length})
-          </button>
+
+        <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-400 uppercase">Delivered</span>
+            <div className="w-9 h-9 bg-slate-800 text-emerald-400 rounded-xl flex items-center justify-center font-bold">
+              <CheckCircle2 className="w-4 h-4" />
+            </div>
+          </div>
+          <p className="text-2xl sm:text-3xl font-black text-white">{deliveredCount}</p>
+          <p className="text-[11px] font-bold text-emerald-400">Successfully Completed</p>
         </div>
+
+        <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-400 uppercase">Total Spent</span>
+            <div className="w-9 h-9 bg-slate-800 text-amber-400 rounded-xl flex items-center justify-center font-bold">
+              <IndianRupee className="w-4 h-4" />
+            </div>
+          </div>
+          <p className="text-2xl sm:text-3xl font-black text-white">₹{totalSpentINR.toLocaleString('en-IN')}</p>
+          <p className="text-[11px] font-bold text-amber-400">Freight Transport Payouts</p>
+        </div>
+
+        <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-400 uppercase">Avg Delivery Time</span>
+            <div className="w-9 h-9 bg-slate-800 text-purple-400 rounded-xl flex items-center justify-center font-bold">
+              <Clock className="w-4 h-4" />
+            </div>
+          </div>
+          <p className="text-2xl sm:text-3xl font-black text-white">1.8 <span className="text-sm font-bold text-purple-400">Hours</span></p>
+          <p className="text-[11px] font-bold text-purple-400">Direct Corridor Routing</p>
+        </div>
+
       </div>
 
-      {/* DISPATCH NEW SHIPMENT MODAL */}
+      {/* CREATE SHIPMENT FORM MODAL */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-3xl p-6 sm:p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-black text-white flex items-center gap-2">
-                <Package className="w-5 h-5 text-blue-400" /> Create & Broadcast Shipment
-              </h3>
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-3xl p-6 sm:p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto space-y-6">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-4">
+              <div>
+                <h3 className="text-xl font-black text-white flex items-center gap-2">
+                  <Package className="w-5 h-5 text-blue-400" /> Create Shipment
+                </h3>
+                <p className="text-xs text-slate-400">Fill in load details to match corridor drivers</p>
+              </div>
               <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-white p-2 rounded-xl bg-slate-800">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {errorMsg && (
-              <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-xs p-3 rounded-xl mb-4 flex items-center gap-2 font-semibold">
+              <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-xs p-3 rounded-xl flex items-center gap-2 font-semibold">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
                 <span>{errorMsg}</span>
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+            <form onSubmit={handleSubmitCreate} className="space-y-4 text-xs">
               <div>
-                <label className="text-[11px] font-bold text-slate-300 uppercase block mb-1">Shipment Name / Title *</label>
+                <label className="text-[11px] font-bold text-slate-300 uppercase block mb-1">Cargo Name *</label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Organic Basmati Rice Sacks"
-                  className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-white focus:outline-none focus:border-blue-500"
+                  className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-xl text-white focus:outline-none focus:border-blue-500 font-medium"
                   required
                 />
               </div>
 
-              <div>
-                <label className="text-[11px] font-bold text-slate-300 uppercase block mb-1">Description / Notes</label>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="e.g. Fragile agricultural produce, requires dry storage"
-                  rows={2}
-                  className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[11px] font-bold text-slate-300 uppercase block mb-1">Package Type</label>
                   <input
@@ -226,7 +296,7 @@ export default function ShipperDashboard({ user, shipments, onCreateShipment, on
                     value={packageType}
                     onChange={(e) => setPackageType(e.target.value)}
                     placeholder="Gunnysacks"
-                    className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-white focus:outline-none focus:border-blue-500"
+                    className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-xl text-white focus:outline-none focus:border-blue-500 font-medium"
                   />
                 </div>
                 <div>
@@ -235,17 +305,7 @@ export default function ShipperDashboard({ user, shipments, onCreateShipment, on
                     type="number"
                     value={weight}
                     onChange={(e) => setWeight(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-white focus:outline-none focus:border-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold text-slate-300 uppercase block mb-1">Offered Price (₹) *</label>
-                  <input
-                    type="number"
-                    value={offeredPrice}
-                    onChange={(e) => setOfferedPrice(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-white focus:outline-none focus:border-blue-500"
+                    className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-xl text-white focus:outline-none focus:border-blue-500 font-medium"
                     required
                   />
                 </div>
@@ -253,197 +313,292 @@ export default function ShipperDashboard({ user, shipments, onCreateShipment, on
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[11px] font-bold text-slate-300 uppercase block mb-1">Pickup Location</label>
+                  <label className="text-[11px] font-bold text-slate-300 uppercase block mb-1">Pickup Location *</label>
                   <input
                     type="text"
                     value={pickupAddr}
                     onChange={(e) => setPickupAddr(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-white focus:outline-none focus:border-blue-500"
+                    className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-xl text-white focus:outline-none focus:border-blue-500 font-medium"
+                    required
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-slate-300 uppercase block mb-1">Destination Village</label>
+                  <label className="text-[11px] font-bold text-slate-300 uppercase block mb-1">Destination Village *</label>
                   <input
                     type="text"
                     value={destAddr}
                     onChange={(e) => setDestAddr(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-white focus:outline-none focus:border-blue-500"
+                    className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-xl text-white focus:outline-none focus:border-blue-500 font-medium"
+                    required
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="text-[11px] font-bold text-slate-300 uppercase block mb-1">Shipment Priority</label>
-                <select
-                  value={priority}
-                  onChange={(e) => setPriority(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-white focus:outline-none focus:border-blue-500"
-                >
-                  <option value="LOW">LOW PRIORITY</option>
-                  <option value="MEDIUM">MEDIUM PRIORITY</option>
-                  <option value="HIGH">HIGH PRIORITY</option>
-                  <option value="URGENT">URGENT EXPEDITED</option>
-                </select>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-300 uppercase block mb-1">Priority</label>
+                  <select
+                    value={priority}
+                    onChange={(e) => setPriority(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-xl text-white focus:outline-none focus:border-blue-500 font-medium"
+                  >
+                    <option value="LOW">LOW PRIORITY</option>
+                    <option value="MEDIUM">MEDIUM PRIORITY</option>
+                    <option value="HIGH">HIGH PRIORITY</option>
+                    <option value="URGENT">URGENT EXPEDITED</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-300 uppercase block mb-1">Offer Price (₹) *</label>
+                  <input
+                    type="number"
+                    value={offeredPrice}
+                    onChange={(e) => setOfferedPrice(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-xl text-white focus:outline-none focus:border-blue-500 font-medium"
+                    required
+                  />
+                </div>
               </div>
 
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black py-3.5 rounded-xl shadow-lg transition-all mt-4"
+                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black py-4 rounded-xl shadow-lg transition-all mt-4 text-xs uppercase tracking-wider"
               >
-                {isSubmitting ? 'BROADCASTING VIA API...' : 'BROADCAST TO DRIVERS (FASTAPI API)'}
+                {isSubmitting ? 'BROADCASTING SHIPMENT...' : 'BROADCAST & FIND DRIVERS'}
               </button>
             </form>
           </div>
         </div>
       )}
 
-      {/* SHIPMENT DETAILS MODAL */}
-      {selectedShipment && (
+      {/* SEARCHING DRIVERS LOADING STATE */}
+      {isSearchingDrivers && (
+        <div className="bg-slate-900 border border-blue-500/30 p-8 rounded-3xl text-center space-y-4 animate-fade-in shadow-2xl">
+          <div className="w-16 h-16 bg-blue-500/10 border border-blue-500/30 text-blue-400 rounded-full flex items-center justify-center mx-auto">
+            <Radio className="w-8 h-8 animate-ping" />
+          </div>
+          <h3 className="text-xl font-black text-white italic">Finding compatible drivers...</h3>
+          <p className="text-xs text-slate-400 max-w-sm mx-auto">
+            RouteNova Smart Engine is searching for return trucks along the {destAddr} corridor.
+          </p>
+        </div>
+      )}
+
+      {/* 3 RECOMMENDED DRIVERS SELECTION MODAL */}
+      {showRecommendedDrivers && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-3xl p-6 sm:p-8 shadow-2xl relative space-y-6">
-            <div className="flex justify-between items-start">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-3xl p-6 sm:p-8 shadow-2xl relative space-y-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-start border-b border-slate-800 pb-4">
               <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <h3 className="text-xl font-black text-white">{selectedShipment.name || selectedShipment.title}</h3>
-                  {getStatusBadge(selectedShipment.status)}
-                </div>
-                <p className="text-xs text-slate-400">ID: {selectedShipment.id}</p>
+                <h3 className="text-xl font-black text-white flex items-center gap-2">
+                  <Truck className="w-5 h-5 text-emerald-400" /> 3 Recommended Corridor Drivers
+                </h3>
+                <p className="text-xs text-slate-400">Select a verified return driver to transport your shipment</p>
               </div>
-              <button onClick={() => setSelectedShipment(null)} className="text-slate-400 hover:text-white p-2 rounded-xl bg-slate-800">
+              <button onClick={() => setShowRecommendedDrivers(false)} className="text-slate-400 hover:text-white p-2 rounded-xl bg-slate-800">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3 text-xs">
-              <div className="grid grid-cols-2 gap-4 pb-2 border-b border-slate-800">
-                <div>
-                  <p className="text-slate-500 font-bold uppercase text-[10px]">Package Type</p>
-                  <p className="text-white font-bold">{selectedShipment.package_type}</p>
-                </div>
-                <div>
-                  <p className="text-slate-500 font-bold uppercase text-[10px]">Weight Payload</p>
-                  <p className="text-emerald-400 font-black">{selectedShipment.weight || selectedShipment.weight_kg} kg</p>
-                </div>
-              </div>
+            <div className="space-y-4">
+              {mockRecommendedDrivers.map((driver) => (
+                <div key={driver.id} className="bg-slate-950 border border-slate-800 p-5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 hover:border-emerald-500/40 transition-all">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-extrabold text-white text-base">{driver.name}</h4>
+                      <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 text-[10px] font-bold rounded flex items-center gap-1">
+                        <Star className="w-3 h-3 fill-emerald-400" /> {driver.rating}
+                      </span>
+                      <span className="text-[10px] font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded">
+                        {driver.match_pct}% Corridor Match
+                      </span>
+                    </div>
 
-              <div className="grid grid-cols-2 gap-4 pb-2 border-b border-slate-800">
-                <div>
-                  <p className="text-slate-500 font-bold uppercase text-[10px]">Offered Payout</p>
-                  <p className="text-emerald-400 font-black text-lg">₹{(selectedShipment.offered_price || selectedShipment.offered_price_inr).toLocaleString('en-IN')}</p>
-                </div>
-                <div>
-                  <p className="text-slate-500 font-bold uppercase text-[10px]">Priority Level</p>
-                  <p className="text-amber-400 font-bold">{selectedShipment.priority}</p>
-                </div>
-              </div>
+                    <p className="text-xs text-slate-400">
+                      Vehicle: <strong className="text-slate-200">{driver.vehicle}</strong> ({driver.capacity_kg}kg capacity)
+                    </p>
 
-              <div className="space-y-1 pt-1">
-                <div className="flex items-center gap-2">
-                  <MapPin className="w-3.5 h-3.5 text-blue-400" />
-                  <span>Pickup: <strong>{selectedShipment.pickup_location}</strong></span>
+                    <div className="flex items-center gap-4 text-xs text-slate-400 pt-1">
+                      <span>ETA: <strong className="text-emerald-400">{driver.eta_mins} mins</strong></span>
+                      <span>Phone: <strong className="text-slate-300">{driver.phone}</strong></span>
+                    </div>
+                  </div>
+
+                  <div className="w-full sm:w-auto text-right flex sm:flex-col justify-between items-center sm:items-end gap-2">
+                    <p className="text-2xl font-black text-emerald-400">₹{driver.price_inr}</p>
+                    <button
+                      onClick={() => handleRequestDriver(driver)}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold px-5 py-2.5 rounded-xl text-xs shadow transition-all flex items-center gap-1.5"
+                    >
+                      REQUEST DRIVER <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Navigation className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Destination: <strong>{selectedShipment.destination}</strong></span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TRACKING & DELIVERY TIMELINE MODAL */}
+      {trackingShipment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-3xl rounded-3xl p-6 sm:p-8 shadow-2xl relative space-y-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-start border-b border-slate-800 pb-4">
+              <div>
+                <h3 className="text-xl font-black text-white flex items-center gap-2">
+                  <Compass className="w-5 h-5 text-emerald-400" /> Live Delivery Tracking
+                </h3>
+                <p className="text-xs text-slate-400">Shipment: {trackingShipment.name || trackingShipment.title} (ID: {trackingShipment.id})</p>
+              </div>
+              <button onClick={() => setTrackingShipment(null)} className="text-slate-400 hover:text-white p-2 rounded-xl bg-slate-800">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="h-72 rounded-2xl overflow-hidden border border-slate-800 relative">
+              <LiveMap
+                shipmentId={trackingShipment.id}
+                origin={{ lat: 12.9716, lng: 77.5946, name: trackingShipment.pickup_location }}
+                destination={{ lat: 12.5218, lng: 76.8951, name: trackingShipment.destination }}
+                isDriver={false}
+                isDemoMode={true}
+              />
+            </div>
+
+            <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-3">
+              <h4 className="text-xs font-bold text-slate-400 uppercase">Delivery Progress Timeline</h4>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+                <div className="bg-slate-900 p-3 rounded-xl border border-emerald-500/40 text-emerald-400 font-bold">
+                  ✓ ACCEPTED
+                </div>
+                <div className={`p-3 rounded-xl border font-bold ${
+                  ['PICKED_UP', 'IN_TRANSIT', 'ARRIVED', 'DELIVERED', 'PAYMENT_RELEASED'].includes(trackingShipment.status)
+                    ? 'bg-slate-900 border-emerald-500/40 text-emerald-400' : 'bg-slate-900/40 border-slate-800 text-slate-500'
+                }`}>
+                  PICKED UP
+                </div>
+                <div className={`p-3 rounded-xl border font-bold ${
+                  ['IN_TRANSIT', 'ARRIVED', 'DELIVERED', 'PAYMENT_RELEASED'].includes(trackingShipment.status)
+                    ? 'bg-slate-900 border-emerald-500/40 text-emerald-400' : 'bg-slate-900/40 border-slate-800 text-slate-500'
+                }`}>
+                  IN TRANSIT
+                </div>
+                <div className={`p-3 rounded-xl border font-bold ${
+                  ['DELIVERED', 'PAYMENT_RELEASED'].includes(trackingShipment.status)
+                    ? 'bg-slate-900 border-emerald-500/40 text-emerald-400' : 'bg-slate-900/40 border-slate-800 text-slate-500'
+                }`}>
+                  DELIVERED
                 </div>
               </div>
             </div>
-
-            {selectedShipment.driver_name && (
-              <div className="bg-emerald-950/20 border border-emerald-500/30 p-4 rounded-2xl flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Truck className="w-6 h-6 text-emerald-400" />
-                  <div>
-                    <p className="text-xs font-black text-white">{selectedShipment.driver_name}</p>
-                    <p className="text-[10px] text-emerald-400 font-bold">Assigned Corridor Driver</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    const shp = selectedShipment;
-                    setSelectedShipment(null);
-                    onSelectShipmentToTrack(shp);
-                  }}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold px-4 py-2 rounded-xl text-xs shadow"
-                >
-                  Track Live GPS
-                </button>
-              </div>
-            )}
-
-            {/* Delete / Cancel Action */}
-            {selectedShipment.status !== 'DELIVERED' && selectedShipment.status !== 'PAYMENT_RELEASED' && (
-              <button
-                onClick={() => handleDeleteShipment(selectedShipment.id)}
-                className="w-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 font-extrabold py-3 rounded-xl text-xs flex items-center justify-center gap-2 transition-all"
-              >
-                <Trash2 className="w-4 h-4" /> CANCEL & DELETE SHIPMENT
-              </button>
-            )}
 
           </div>
         </div>
       )}
 
-      {/* Dispatches List */}
-      <div className="space-y-4">
-        <h3 className="text-xl font-black text-white italic">Active Shipment Dispatches</h3>
+      {/* SHIPMENT CARDS & TABLE */}
+      <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl space-y-6">
+        
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setFilterStatus('ALL')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                filterStatus === 'ALL' ? 'bg-blue-600 text-white' : 'bg-slate-950 text-slate-400 hover:text-white'
+              }`}
+            >
+              All Dispatches ({shipments.length})
+            </button>
+            <button
+              onClick={() => setFilterStatus('ACTIVE')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                filterStatus === 'ACTIVE' ? 'bg-blue-600 text-white' : 'bg-slate-950 text-slate-400 hover:text-white'
+              }`}
+            >
+              Active ({activeCount})
+            </button>
+            <button
+              onClick={() => setFilterStatus('DELIVERED')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                filterStatus === 'DELIVERED' ? 'bg-blue-600 text-white' : 'bg-slate-950 text-slate-400 hover:text-white'
+              }`}
+            >
+              Delivered ({deliveredCount})
+            </button>
+          </div>
 
-        {filteredShipments.length === 0 ? (
-          <div className="glass-card p-12 rounded-3xl border border-slate-800 text-center space-y-4">
-            <Package className="w-12 h-12 text-slate-600 mx-auto" />
-            <p className="text-slate-400 text-xs">No shipments found matching the selected filter.</p>
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search cargo, village, or ID..."
+              className="bg-slate-950 border border-slate-800 pl-9 pr-4 py-2 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500 w-full sm:w-64"
+            />
+          </div>
+        </div>
+
+        {/* SHIPMENT TABLE */}
+        {filteredList.length === 0 ? (
+          <div className="bg-slate-950 p-12 rounded-2xl text-center space-y-3 border border-slate-800">
+            <Package className="w-10 h-10 text-slate-600 mx-auto" />
+            <p className="text-xs text-slate-400">No shipments found matching the selected filter query.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredShipments.map((shp) => (
-              <div key={shp.id} className="glass-card p-6 rounded-3xl border border-slate-800 space-y-4 hover:border-slate-700 transition-all">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <h4 className="font-extrabold text-white text-base">{shp.name || shp.title}</h4>
-                      {getStatusBadge(shp.status)}
-                    </div>
-                    <p className="text-xs text-slate-400">
-                      {shp.package_type} • Weight: <strong className="text-slate-200">{shp.weight || shp.weight_kg}kg</strong>
-                    </p>
-                  </div>
-                  <p className="text-xl font-black text-blue-400">₹{(shp.offered_price || shp.offered_price_inr).toLocaleString('en-IN')}</p>
-                </div>
-
-                <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 text-xs text-slate-300 space-y-1">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-3.5 h-3.5 text-blue-400" />
-                    <span>Pickup: {shp.pickup_location}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Navigation className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Drop: {shp.destination}</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between pt-2">
-                  <button
-                    onClick={() => setSelectedShipment(shp)}
-                    className="text-xs font-extrabold text-slate-300 hover:text-white flex items-center gap-1.5 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl hover:bg-slate-800"
-                  >
-                    <Eye className="w-3.5 h-3.5 text-blue-400" /> View Details
-                  </button>
-
-                  {shp.driver_name && (
-                    <button
-                      onClick={() => onSelectShipmentToTrack(shp)}
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-extrabold px-3 py-1.5 rounded-xl shadow"
-                    >
-                      Track GPS
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-slate-800 text-slate-400 font-bold uppercase text-[10px]">
+                  <th className="pb-3">Shipment ID</th>
+                  <th className="pb-3">Cargo</th>
+                  <th className="pb-3">Weight</th>
+                  <th className="pb-3">Destination</th>
+                  <th className="pb-3">Driver</th>
+                  <th className="pb-3">ETA</th>
+                  <th className="pb-3">Status</th>
+                  <th className="pb-3">Price</th>
+                  <th className="pb-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60">
+                {filteredList.map((shp) => (
+                  <tr key={shp.id} className="hover:bg-slate-950/40 transition-all">
+                    <td className="py-3.5 font-mono text-slate-400 font-bold">{shp.id}</td>
+                    <td className="py-3.5 font-bold text-white">{shp.name || shp.title}</td>
+                    <td className="py-3.5 text-slate-300 font-bold">{shp.weight || shp.weight_kg} kg</td>
+                    <td className="py-3.5 text-slate-300">{shp.destination}</td>
+                    <td className="py-3.5 text-emerald-400 font-bold">
+                      {shp.driver_name || <span className="text-slate-500 font-normal">Unassigned</span>}
+                    </td>
+                    <td className="py-3.5 text-slate-300">
+                      {shp.driver_name ? '45 mins' : '-'}
+                    </td>
+                    <td className="py-3.5">{getStatusBadge(shp.status)}</td>
+                    <td className="py-3.5 font-black text-white">₹{(shp.offered_price || shp.offered_price_inr).toLocaleString('en-IN')}</td>
+                    <td className="py-3.5 text-right space-x-2">
+                      <button
+                        onClick={() => setTrackingShipment(shp)}
+                        className="bg-slate-950 border border-slate-800 hover:bg-slate-800 text-slate-300 font-extrabold px-3 py-1.5 rounded-xl text-[11px]"
+                      >
+                        Track GPS
+                      </button>
+                      <button
+                        onClick={() => handleDeleteShipment(shp.id)}
+                        className="bg-red-500/10 text-red-400 hover:bg-red-500/20 px-2.5 py-1.5 rounded-xl text-[11px]"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 inline" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
+
       </div>
 
     </div>

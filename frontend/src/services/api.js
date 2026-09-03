@@ -131,7 +131,7 @@ export const api = {
     return data;
   },
 
-  // RouteNova Smart Matching Engine (GET /api/matches)
+  // RouteNova Smart Matching Engine
   getRecommendedMatches: async (params = {}) => {
     const sortBy = params.sort_by || 'match_score';
     const currLat = params.curr_lat || 12.9716;
@@ -165,33 +165,75 @@ export const api = {
     return await res.json();
   },
 
-  // Digital Proof & Escrow
-  uploadProof: async (proofData) => {
-    const res = await fetch(`${API_BASE_URL}/proofs`, {
+  // Digital Proof of Delivery APIs
+  uploadPickupProof: async (proofData) => {
+    const res = await fetch(`${API_BASE_URL}/proofs/pickup`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(proofData)
     });
-    if (!res.ok) throw new Error('Proof upload failed');
-    return await res.json();
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Pickup proof upload failed');
+    return data;
   },
 
+  uploadDeliveryProof: async (proofData) => {
+    const res = await fetch(`${API_BASE_URL}/proofs/delivery`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(proofData)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Delivery proof upload failed');
+    return data;
+  },
+
+  verifyDelivery: async (verifyData) => {
+    const res = await fetch(`${API_BASE_URL}/proofs/verify`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(verifyData)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'QR verification failed');
+    return data;
+  },
+
+  // DEMO Escrow & Payment Lifecycle APIs
   initiateEscrow: async (shipmentId, amountInr) => {
     const res = await fetch(`${API_BASE_URL}/payments/escrow`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ shipment_id: shipmentId, amount_inr: amountInr })
     });
-    if (!res.ok) throw new Error('Escrow initiation failed');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Escrow initiation failed');
+    return data;
+  },
+
+  releaseEscrow: async (shipmentId) => {
+    const res = await fetch(`${API_BASE_URL}/payments/release`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ shipment_id: shipmentId })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Payment release failed');
+    return data;
+  },
+
+  getPaymentDetails: async (shipmentId) => {
+    const res = await fetch(`${API_BASE_URL}/payments/${shipmentId}`, { headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to fetch payment details');
     return await res.json();
   },
 
-  releasePayment: async (shipmentId) => {
-    const res = await fetch(`${API_BASE_URL}/payments/release?shipment_id=${shipmentId}`, {
-      method: 'POST',
-      headers: getHeaders()
-    });
-    if (!res.ok) throw new Error('Payment release failed');
+  // Environmental Analytics Engine APIs
+  getEnvironmentalAnalytics: async (params = {}) => {
+    const eff = params.fuel_efficiency || 8.5;
+    const factor = params.emission_factor || 2.68;
+    const res = await fetch(`${API_BASE_URL}/analytics/environmental?fuel_efficiency=${eff}&emission_factor=${factor}`, { headers: getHeaders() });
+    if (!res.ok) throw new Error('Fetch environmental analytics failed');
     return await res.json();
   },
 

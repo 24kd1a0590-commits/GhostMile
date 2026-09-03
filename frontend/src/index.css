@@ -2,11 +2,12 @@
 @import "tailwindcss";
 @import "leaflet/dist/leaflet.css";
 
-body {
+html, body {
   background-color: #020617;
   color: #f8fafc;
   font-family: 'Inter', sans-serif;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 .glass-card {
@@ -21,6 +22,27 @@ body {
   50% { opacity: 1; transform: scale(1.04); }
 }
 
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .animate-pulse-glow {
   animation: pulse-glow 3s infinite ease-in-out;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Leaflet map custom marker adjustments */
+.leaflet-container {
+  font-family: 'Inter', sans-serif !important;
+  border-radius: 1rem;
 }

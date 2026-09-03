@@ -99,9 +99,9 @@ def evaluate_match(
         0.10 * timing_score
     )
 
-    # If capacity is exceeded, penalize severely
+    # If payload weight exceeds available truck capacity, cap match score at 15% (unusable)
     if weight > available_capacity:
-        raw_match = min(raw_match, 0.35)
+        raw_match = min(raw_match, 0.15)
 
     match_score = round(raw_match * 100.0)
 
@@ -118,10 +118,9 @@ def evaluate_match(
     reason = f"Shipment is near your route corridor ({detour_km} km detour) and uses {round(cap_used_pct)}% of truck capacity."
 
     # Environmental Impact Math
-    # Avoided empty return trip distance
     avoided_km = round(haversine_distance(p_loc["lat"], p_loc["lng"], d_loc["lat"], d_loc["lng"]), 1)
-    fuel_saved_liters = round(avoided_km * 0.35, 2)  # 0.35 L diesel per km
-    co2_saved_kg = round(fuel_saved_liters * 2.68, 2)  # 2.68 kg CO2 per L
+    fuel_saved_liters = round(avoided_km * 0.35, 2)
+    co2_saved_kg = round(fuel_saved_liters * 2.68, 2)
 
     return {
         "match_score": match_score,

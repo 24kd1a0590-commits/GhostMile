@@ -8,6 +8,8 @@ import DriverDashboard from './components/DriverDashboard';
 import ShipperDashboard from './components/ShipperDashboard';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import AdminDashboard from './components/AdminDashboard';
+import ToastContainer from './components/ToastContainer';
+import MobileBottomNav from './components/MobileBottomNav';
 import { api } from './services/api';
 import { ShieldAlert, ArrowRight } from 'lucide-react';
 
@@ -20,8 +22,20 @@ export default function App() {
   const [shipments, setShipments] = useState([]);
   const [analytics, setAnalytics] = useState(null);
   const [roleWarning, setRoleWarning] = useState(null);
+  const [toasts, setToasts] = useState([]);
 
-  // Initial load
+  const showToast = (message, type = 'success', title = null) => {
+    const id = Date.now() + Math.random();
+    setToasts((prev) => [...prev, { id, message, type, title }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4500);
+  };
+
+  const closeToast = (id) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
   useEffect(() => {
     initUserSession();
     fetchData();
@@ -60,6 +74,8 @@ export default function App() {
     setUserProfile(profile || authData);
     fetchData();
 
+    showToast(`Welcome back, ${authData.name}!`, 'success', 'Login Successful');
+
     if (authData.role === 'driver') {
       setActiveTab('driver');
     } else if (authData.role === 'shipper') {
@@ -76,6 +92,8 @@ export default function App() {
     setUserProfile(profile || authData);
     fetchData();
 
+    showToast(`Account registered successfully as ${authData.role.toUpperCase()}`, 'success', 'Welcome to RouteNova');
+
     if (authData.role === 'driver') {
       setActiveTab('driver');
     } else if (authData.role === 'shipper') {
@@ -91,6 +109,7 @@ export default function App() {
     setUserProfile(null);
     setActiveTab('landing');
     setRoleWarning(null);
+    showToast('Logged out safely', 'info');
   };
 
   const handleTabChange = (targetTab) => {
@@ -122,7 +141,7 @@ export default function App() {
       setRoleWarning({
         title: 'Shipper Dashboard Restricted',
         message: `You are logged in as a ${role.toUpperCase()}. Only SHIPPERS can dispatch new loads.`,
-        suggestedTab: role === 'driver' ? 'driver' : 'admin'
+        suggestedTab: role === 'driver' ? 'driver' : 'shipper'
       });
       setActiveTab('restricted');
       return;
@@ -142,8 +161,10 @@ export default function App() {
   };
 
   const handleCreateShipment = async (shipmentData) => {
-    await api.createShipment(shipmentData);
+    const created = await api.createShipment(shipmentData);
     fetchData();
+    showToast(`Shipment "${created.name}" created and broadcasting to drivers`, 'success', 'Dispatched');
+    return created;
   };
 
   return (
@@ -172,6 +193,7 @@ export default function App() {
               user={user}
               shipments={shipments}
               onRefreshShipments={fetchData}
+              showToast={showToast}
             />
           )}
 
@@ -182,6 +204,7 @@ export default function App() {
               onCreateShipment={handleCreateShipment}
               onSelectShipmentToTrack={(shp) => setActiveTab('driver')}
               onRefreshShipments={fetchData}
+              showToast={showToast}
             />
           )}
 
@@ -235,6 +258,16 @@ export default function App() {
         onClose={() => setIsProfileOpen(false)}
         profile={userProfile}
         onLogout={handleLogout}
+      />
+
+      <ToastContainer toasts={toasts} onCloseToast={closeToast} />
+
+      <MobileBottomNav
+        activeTab={activeTab === 'restricted' ? (user?.role || 'landing') : activeTab}
+        setActiveTab={handleTabChange}
+        user={user}
+        onOpenAuth={() => setIsAuthOpen(true)}
+        onOpenProfile={() => setIsProfileOpen(true)}
       />
 
     </div>
