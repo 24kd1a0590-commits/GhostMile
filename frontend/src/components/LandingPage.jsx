@@ -232,12 +232,12 @@ export default function LandingPage({ onSelectRole, onOpenAuth }) {
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 border border-emerald-500/30 p-10 sm:p-14 rounded-3xl text-center space-y-6 shadow-2xl relative overflow-hidden">
           <h3 className="text-3xl sm:text-4xl font-black text-white">Ready to Revolutionize Rural Transport?</h3>
-          <p className="text-slate-300 text-sm max-w-xl mx-auto">Experience the SIH 2024 MVP live in standalone demonstration mode.</p>
+          <p className="text-slate-300 text-sm max-w-xl mx-auto">Experience the SIH 2024 RouteNova Platform live.</p>
           <button
             onClick={onOpenAuth}
             className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black px-8 py-4 rounded-2xl text-sm shadow-xl hover:scale-105 transition-all inline-flex items-center gap-2"
           >
-            Get Started with Demo Mode <ArrowRight className="w-4 h-4" />
+            Get Started <ArrowRight className="w-4 h-4" />
           </button>
         </div>
       </section>

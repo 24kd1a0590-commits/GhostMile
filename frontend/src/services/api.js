@@ -1,5 +1,21 @@
 const API_BASE_URL = 'http://localhost:8000/api';
 
+const safeFetch = async (url, options = {}) => {
+  try {
+    return await fetch(url, options);
+  } catch (err) {
+    if (typeof url === 'string' && url.includes('localhost')) {
+      const fallbackUrl = url.replace('localhost', '127.0.0.1');
+      try {
+        return await fetch(fallbackUrl, options);
+      } catch (fallbackErr) {
+        throw new Error('Unable to connect to backend server. Please verify backend is running at http://localhost:8000');
+      }
+    }
+    throw new Error('Unable to connect to backend server. Please verify backend is running.');
+  }
+};
+
 const getHeaders = () => {
   const token = localStorage.getItem('routenova_token');
   return {
@@ -11,7 +27,7 @@ const getHeaders = () => {
 export const api = {
   // Authentication APIs
   login: async (email, password) => {
-    const res = await fetch(`${API_BASE_URL}/auth/login`, {
+    const res = await safeFetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password })
@@ -25,7 +41,7 @@ export const api = {
   },
 
   register: async (userData) => {
-    const res = await fetch(`${API_BASE_URL}/auth/register`, {
+    const res = await safeFetch(`${API_BASE_URL}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(userData)
@@ -49,7 +65,7 @@ export const api = {
     if (!token) return null;
 
     try {
-      const res = await fetch(`${API_BASE_URL}/users/me`, { headers: getHeaders() });
+      const res = await safeFetch(`${API_BASE_URL}/users/me`, { headers: getHeaders() });
       if (!res.ok) {
         localStorage.removeItem('routenova_token');
         localStorage.removeItem('routenova_user');
@@ -64,7 +80,7 @@ export const api = {
 
   logout: async () => {
     try {
-      await fetch(`${API_BASE_URL}/auth/logout`, { method: 'POST', headers: getHeaders() });
+      await safeFetch(`${API_BASE_URL}/auth/logout`, { method: 'POST', headers: getHeaders() });
     } catch (e) {}
     localStorage.removeItem('routenova_token');
     localStorage.removeItem('routenova_user');
@@ -72,7 +88,7 @@ export const api = {
 
   // Full Shipment CRUD APIs
   createShipment: async (shipmentData) => {
-    const res = await fetch(`${API_BASE_URL}/shipments`, {
+    const res = await safeFetch(`${API_BASE_URL}/shipments`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(shipmentData)
@@ -89,19 +105,19 @@ export const api = {
     if (filters.driver_id) queryParams.push(`driver_id=${encodeURIComponent(filters.driver_id)}`);
     
     const queryString = queryParams.length > 0 ? `?${queryParams.join('&')}` : '';
-    const res = await fetch(`${API_BASE_URL}/shipments${queryString}`, { headers: getHeaders() });
+    const res = await safeFetch(`${API_BASE_URL}/shipments${queryString}`, { headers: getHeaders() });
     if (!res.ok) throw new Error('Failed to fetch shipments.');
     return await res.json();
   },
 
   getShipmentById: async (shipmentId) => {
-    const res = await fetch(`${API_BASE_URL}/shipments/${shipmentId}`, { headers: getHeaders() });
+    const res = await safeFetch(`${API_BASE_URL}/shipments/${shipmentId}`, { headers: getHeaders() });
     if (!res.ok) throw new Error('Shipment not found.');
     return await res.json();
   },
 
   updateShipment: async (shipmentId, updateData) => {
-    const res = await fetch(`${API_BASE_URL}/shipments/${shipmentId}`, {
+    const res = await safeFetch(`${API_BASE_URL}/shipments/${shipmentId}`, {
       method: 'PUT',
       headers: getHeaders(),
       body: JSON.stringify(updateData)
@@ -112,7 +128,7 @@ export const api = {
   },
 
   deleteShipment: async (shipmentId) => {
-    const res = await fetch(`${API_BASE_URL}/shipments/${shipmentId}`, {
+    const res = await safeFetch(`${API_BASE_URL}/shipments/${shipmentId}`, {
       method: 'DELETE',
       headers: getHeaders()
     });
@@ -122,7 +138,7 @@ export const api = {
   },
 
   acceptShipment: async (shipmentId) => {
-    const res = await fetch(`${API_BASE_URL}/shipments/${shipmentId}/accept`, {
+    const res = await safeFetch(`${API_BASE_URL}/shipments/${shipmentId}/accept`, {
       method: 'POST',
       headers: getHeaders()
     });
@@ -143,7 +159,7 @@ export const api = {
 
     const url = `${API_BASE_URL}/matches?sort_by=${sortBy}&curr_lat=${currLat}&curr_lng=${currLng}&dest_lat=${destLat}&dest_lng=${destLng}&available_capacity=${availableCap}&truck_capacity=${truckCap}`;
     
-    const res = await fetch(url, { headers: getHeaders() });
+    const res = await safeFetch(url, { headers: getHeaders() });
     if (!res.ok) throw new Error('Failed to compute smart matches.');
     return await res.json();
   },
@@ -151,7 +167,7 @@ export const api = {
   // Live Tracking
   sendTrackingPing: async (pingData) => {
     try {
-      await fetch(`${API_BASE_URL}/tracking`, {
+      await safeFetch(`${API_BASE_URL}/tracking`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify(pingData)
@@ -160,14 +176,14 @@ export const api = {
   },
 
   getTrackingState: async (shipmentId) => {
-    const res = await fetch(`${API_BASE_URL}/tracking/${shipmentId}`, { headers: getHeaders() });
+    const res = await safeFetch(`${API_BASE_URL}/tracking/${shipmentId}`, { headers: getHeaders() });
     if (!res.ok) throw new Error('Get tracking state failed');
     return await res.json();
   },
 
   // Digital Proof of Delivery APIs
   uploadPickupProof: async (proofData) => {
-    const res = await fetch(`${API_BASE_URL}/proofs/pickup`, {
+    const res = await safeFetch(`${API_BASE_URL}/proofs/pickup`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(proofData)
@@ -178,7 +194,7 @@ export const api = {
   },
 
   uploadDeliveryProof: async (proofData) => {
-    const res = await fetch(`${API_BASE_URL}/proofs/delivery`, {
+    const res = await safeFetch(`${API_BASE_URL}/proofs/delivery`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(proofData)
@@ -189,7 +205,7 @@ export const api = {
   },
 
   verifyDelivery: async (verifyData) => {
-    const res = await fetch(`${API_BASE_URL}/proofs/verify`, {
+    const res = await safeFetch(`${API_BASE_URL}/proofs/verify`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(verifyData)
@@ -201,7 +217,7 @@ export const api = {
 
   // DEMO Escrow & Payment Lifecycle APIs
   initiateEscrow: async (shipmentId, amountInr) => {
-    const res = await fetch(`${API_BASE_URL}/payments/escrow`, {
+    const res = await safeFetch(`${API_BASE_URL}/payments/escrow`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ shipment_id: shipmentId, amount_inr: amountInr })
@@ -212,7 +228,7 @@ export const api = {
   },
 
   releaseEscrow: async (shipmentId) => {
-    const res = await fetch(`${API_BASE_URL}/payments/release`, {
+    const res = await safeFetch(`${API_BASE_URL}/payments/release`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ shipment_id: shipmentId })
@@ -223,7 +239,7 @@ export const api = {
   },
 
   getPaymentDetails: async (shipmentId) => {
-    const res = await fetch(`${API_BASE_URL}/payments/${shipmentId}`, { headers: getHeaders() });
+    const res = await safeFetch(`${API_BASE_URL}/payments/${shipmentId}`, { headers: getHeaders() });
     if (!res.ok) throw new Error('Failed to fetch payment details');
     return await res.json();
   },
@@ -232,14 +248,14 @@ export const api = {
   getEnvironmentalAnalytics: async (params = {}) => {
     const eff = params.fuel_efficiency || 8.5;
     const factor = params.emission_factor || 2.68;
-    const res = await fetch(`${API_BASE_URL}/analytics/environmental?fuel_efficiency=${eff}&emission_factor=${factor}`, { headers: getHeaders() });
+    const res = await safeFetch(`${API_BASE_URL}/analytics/environmental?fuel_efficiency=${eff}&emission_factor=${factor}`, { headers: getHeaders() });
     if (!res.ok) throw new Error('Fetch environmental analytics failed');
     return await res.json();
   },
 
   // System Analytics
   getAnalytics: async () => {
-    const res = await fetch(`${API_BASE_URL}/analytics`, { headers: getHeaders() });
+    const res = await safeFetch(`${API_BASE_URL}/analytics`, { headers: getHeaders() });
     if (!res.ok) throw new Error('Fetch analytics failed');
     return await res.json();
   }

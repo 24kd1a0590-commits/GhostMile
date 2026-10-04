@@ -74,20 +74,6 @@ export default function AuthModal({ isOpen, onClose, onLogin, onRegister }) {
     }
   };
 
-  const handleQuickDemoLogin = async (demoRole) => {
-    setError('');
-    setLoading(true);
-    const demoEmail = demoRole === 'driver' ? 'driver@routenova.in' : demoRole === 'admin' ? 'admin@routenova.in' : 'shipper@routenova.in';
-    try {
-      await onLogin(demoEmail, 'demo123');
-      onClose();
-    } catch (e) {
-      setError('Demo account login failed. Check backend status.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in">
       <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl p-6 sm:p-8 shadow-2xl relative">
@@ -111,36 +97,6 @@ export default function AuthModal({ isOpen, onClose, onLogin, onRegister }) {
           <p className="text-xs text-slate-400 mt-1">
             JWT Production Authentication & RBAC Engine
           </p>
-        </div>
-
-        {/* Quick Demo Shortcuts */}
-        <div className="bg-slate-950/80 border border-emerald-500/30 p-3 rounded-2xl mb-6">
-          <p className="text-[10px] font-extrabold uppercase text-emerald-400 tracking-wider text-center mb-2">
-            ⚡ Instant 1-Click Demo Login
-          </p>
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              type="button"
-              onClick={() => handleQuickDemoLogin('driver')}
-              className="py-2 px-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-300 rounded-xl text-[10px] font-bold transition-all flex items-center justify-center gap-1"
-            >
-              <Truck className="w-3 h-3" /> Driver
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickDemoLogin('shipper')}
-              className="py-2 px-2 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 rounded-xl text-[10px] font-bold transition-all flex items-center justify-center gap-1"
-            >
-              <Package className="w-3 h-3" /> Shipper
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickDemoLogin('admin')}
-              className="py-2 px-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-300 rounded-xl text-[10px] font-bold transition-all flex items-center justify-center gap-1"
-            >
-              <Shield className="w-3 h-3" /> Admin
-            </button>
-          </div>
         </div>
 
         {/* Tab Switcher */}
